@@ -1,4 +1,4 @@
--- Text Adventure + Visual Dungeon Explorer
+-- Text Adventure + Visual Dungeon Explorer with Gold Squares
 -- Based on Procedural Dungeon Generator (BSP)
 
 function love.load()
@@ -21,9 +21,11 @@ function love.load()
         wall = {0.3, 0.3, 0.3},
         floor = {0.6, 0.6, 0.6},
         player = {1, 0.3, 0.3},
-        grid_line = {0.2, 0.2, 0.2, 0.5}
+        grid_line = {0.2, 0.2, 0.2, 0.5},
+        gold = {1, 0.84, 0}  -- Gold color
     }
 
+    score = 0
     generateDungeon()
     
     local firstRoom = dungeon.rooms[1]
@@ -32,21 +34,29 @@ function love.load()
         y = firstRoom.center.y
     }
 
+    spawnGoldSquares()  -- Create 5 random gold squares
+    
     message = "You awaken in a dark room."
 end
 
 function love.keypressed(key)
     local dirX, dirY = 0, 0
 
-    if key == "w" then dirY = -1
-    elseif key == "s" then dirY = 1
-    elseif key == "a" then dirX = -1
-    elseif key == "d" then dirX = 1
+    if key == "w" then 
+        dirY = -1
+    elseif key == "s" then 
+        dirY = 1
+    elseif key == "a" then 
+        dirX = -1
+    elseif key == "d" then 
+        dirX = 1
     elseif key == "r" then
         generateDungeon()
         local firstRoom = dungeon.rooms[1]
         player.x = firstRoom.center.x
         player.y = firstRoom.center.y
+        score = 0              -- Reset score on regeneration
+        spawnGoldSquares()     -- Reset gold squares
         message = "You are in a new dungeon."
         return
     elseif key == "escape" then
@@ -59,6 +69,16 @@ function love.keypressed(key)
         player.x = newX
         player.y = newY
         message = describeLocation()
+        
+        -- Check if player lands on a gold square
+        for i = #goldSquares, 1, -1 do
+            local g = goldSquares[i]
+            if g.x == player.x and g.y == player.y then
+                table.remove(goldSquares, i)
+                score = score + 1
+                message = "You collected gold! Score: " .. score
+            end
+        end
     else
         message = "You bump into a wall."
     end
@@ -67,6 +87,7 @@ end
 function love.draw()
     love.graphics.setBackgroundColor(colors.background)
 
+    -- Draw dungeon grid
     for y = 1, GRID_DIM do
         for x = 1, GRID_DIM do
             local screenX = (x - 1) * CELL_SIZE
@@ -84,6 +105,14 @@ function love.draw()
         end
     end
 
+    -- Draw gold squares
+    for _, gold in ipairs(goldSquares) do
+        local screenX = (gold.x - 1) * CELL_SIZE
+        local screenY = (gold.y - 1) * CELL_SIZE
+        love.graphics.setColor(colors.gold)
+        love.graphics.rectangle("fill", screenX, screenY, CELL_SIZE, CELL_SIZE)
+    end
+
     -- Draw player
     love.graphics.setColor(colors.player)
     love.graphics.rectangle("fill", (player.x - 1) * CELL_SIZE, (player.y - 1) * CELL_SIZE, CELL_SIZE, CELL_SIZE)
@@ -92,7 +121,8 @@ function love.draw()
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Location: (" .. player.x .. "," .. player.y .. ")", WINDOW_SIZE + 10, 10, 180)
     love.graphics.printf(message, WINDOW_SIZE + 10, 40, 180)
-    love.graphics.printf("WASD = Move\nR = Regenerate\nESC = Quit", WINDOW_SIZE + 10, 100, 180)
+    love.graphics.printf("Score: " .. score, WINDOW_SIZE + 10, 70, 180)
+    love.graphics.printf("WASD = Move\nR = Regenerate\nESC = Quit\nReach gold squares to get score!", WINDOW_SIZE + 10, 100, 180)
 end
 
 function describeLocation()
@@ -236,6 +266,31 @@ function carveRect(startX, startY, width, height, tileType)
         for x = startX, startX + width - 1 do
             if y >= 1 and y <= GRID_DIM and x >= 1 and x <= GRID_DIM then
                 dungeon.grid[y][x] = tileType
+            end
+        end
+    end
+end
+
+-- Function to spawn 5 random gold squares on floor tiles
+function spawnGoldSquares()
+    goldSquares = {}
+    local count = 0
+    while count < 5 do
+        local randomX = math.random(1, GRID_DIM)
+        local randomY = math.random(1, GRID_DIM)
+        -- Only place gold on floor tiles (tile == 0) and avoid placing at the player's position
+        if dungeon.grid[randomY][randomX] == 0 and (not player or (player.x ~= randomX or player.y ~= randomY)) then
+            -- Ensure a gold square isn't already placed here
+            local alreadyExists = false
+            for _, g in ipairs(goldSquares) do
+                if g.x == randomX and g.y == randomY then
+                    alreadyExists = true
+                    break
+                end
+            end
+            if not alreadyExists then
+                table.insert(goldSquares, {x = randomX, y = randomY})
+                count = count + 1
             end
         end
     end
